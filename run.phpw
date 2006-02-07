@@ -1,0 +1,11 @@
+#!/usr/bin/php
+<?php
+/**
+*   Starts the Configuration editor.
+*
+*   @author Anant Narayanan <anant@php.net>
+*/
+require_once "Gtk2/PHPConfig.php";
+new Gtk2_PHPConfig(NULL);
+Gtk::main();
+?>
