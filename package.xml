@@ -17,17 +17,17 @@ http://pear.php.net/dtd/package-2.0.xsd">
   <email>anant@php.net</email>
   <active>yes</active>
  </lead>
- <date>2006-01-30</date>
+ <date>2006-02-08</date>
  <version>
-  <release>1.0.0</release>
-  <api>1.0.0</api>
+  <release>1.0.0RC1</release>
+  <api>1.0.0RC1</api>
  </version>
  <stability>
-  <release>stable</release>
-  <api>stable</api>
+  <release>beta</release>
+  <api>beta</api>
  </stability>
  <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>
- <notes>Preserve inline comments and bug fixes.</notes>
+ <notes>Big Bug fixes, new extension support, and much faster parsing :) !</notes>
  <contents>
   <dir name="/">
    <dir baseinstalldir="Gtk2" name="/">
@@ -60,12 +60,40 @@ http://pear.php.net/dtd/package-2.0.xsd">
  <changelog>
   <release>
    <version>
-    <release>1.0.0</release>
-    <api>1.0.0</api>
+    <release>1.0.0RC1</release>
+    <api>1.0.0RC1</api>
    </version>
    <stability>
-     <release>stable</release>
-     <api>stable</api>
+     <release>beta</release>
+     <api>beta</api>
+   </stability>
+   <date>2006-02-08</date>
+   <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>
+   <notes>Big Bug fixes, new extension support, and much faster parsing :) !</notes>
+  </release> 
+  
+  <release>
+   <version>
+    <release>0.9.8</release>
+    <api>0.9.8</api>
+   </version>
+   <stability>
+     <release>beta</release>
+     <api>beta</api>
+   </stability>
+   <date>2006-02-07</date>
+   <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>
+   <notes>Conditional votes honoured.</notes>
+  </release>   
+     
+  <release>
+   <version>
+    <release>0.9.0</release>
+    <api>0.9.0</api>
+   </version>
+   <stability>
+     <release>beta</release>
+     <api>beta</api>
    </stability>
    <date>2006-01-30</date>
    <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>
@@ -74,8 +102,8 @@ http://pear.php.net/dtd/package-2.0.xsd">
      
   <release>
    <version>
-    <release>0.9.2</release>
-    <api>0.9.2</api>
+    <release>0.8.2</release>
+    <api>0.8.2</api>
    </version>
    <stability>
      <release>beta</release>
@@ -106,8 +134,8 @@ http://pear.php.net/dtd/package-2.0.xsd">
     <api>0.6</api>
    </version>
    <stability>
-    <release>beta</release>
-    <api>beta</api>
+    <release>alpha</release>
+    <api>alpha</api>
    </stability>
    <date>2006-01-26</date>
    <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>
@@ -120,8 +148,8 @@ http://pear.php.net/dtd/package-2.0.xsd">
     <api>0.5</api>
    </version>
    <stability>
-    <release>beta</release>
-    <api>beta</api>
+    <release>alpha</release>
+    <api>alpha</api>
    </stability>
    <date>2006-01-23</date>
    <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>
@@ -133,8 +161,8 @@ http://pear.php.net/dtd/package-2.0.xsd">
     <api>0.4</api>
    </version>
    <stability>
-    <release>beta</release>
-    <api>beta</api>
+    <release>alpha</release>
+    <api>alpha</api>
    </stability>
    <date>2006-01-22</date>
    <license uri="http://www.gnu.org/copyleft/lesser.html">LGPL Version 2.1</license>

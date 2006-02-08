@@ -24,7 +24,7 @@ switch ($argc) {
             echo "\nThe file does not exist!\n";
         }
     default:
-        echo "\nUsage: php Gtk2_PHPConfig.php [INI File]\n";
+        echo "\nUsage: gtk2_phponfig [INI File]\n";
         echo "Where [INI File] is an optional argument, and the name of the file you want to edit.";
         echo "\nIf no arguments are passed, a new INI file is created\n\n";
         exit();

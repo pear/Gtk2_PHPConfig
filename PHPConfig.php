@@ -18,7 +18,12 @@
  * pane, and their corresponding options in the top right pane. The bottom
  * right pane displays the description of the option selected and the
  * facility to change the value of that option.
- * 
+ *
+ * @todo    Implement Christian's suggestion of asking for confirmation when a
+ *          file is overwritten while doing a "save as"
+ * @todo    Add facility to add directives, apart from additions to XML
+ * @todo    Clicking Cancel on the File-Open dialog generates a notice
+ *
  * @category    Gtk2
  * @package     PHPConfig
  * @author      Anant Narayanan <anant@php.net>
@@ -132,6 +137,14 @@ class Gtk2_PHPConfig extends GtkWindow
      */
     protected $progress;
 
+    /**
+     * The extension modules loaded/unloaded in the current file parsed.
+     *
+     * @var Array
+     * @access protected
+     */
+    protected $extensions;
+
     //}}}
     //{{{ constants
 
@@ -163,6 +176,16 @@ class Gtk2_PHPConfig extends GtkWindow
      * Array Index - InLine comments of directive
      */
     const COMMENT_INLINE = "CommentsI";
+
+    /**
+     * Extension Option - Extension is enabled
+     */
+    const EXT_ENABLED = "Enabled";
+
+    /**
+     * Extension Option - Extension is disabled
+     */
+    const EXT_DISABLED = "Disabled";
 
     //}}}
     //{{{ __construct()
@@ -404,20 +427,31 @@ class Gtk2_PHPConfig extends GtkWindow
     function onOptionSelect($selected)
     {
         list($model, $iter) = $selected->get_selected();
-        if (!$iter) {
+        list($sModel, $sIter) = $this->sectionTree->get_selection()->get_selected();
+        if (!$iter || !$sIter) {
             return;
         }
         $option = $model->get_value($iter, 0);
+        $section = $sModel->get_value($sIter, 0);
         /* Querying XML definition file for configuration options
          * corresponding to the currently selected confugration section
          */
-        $desc =
-            $this->xpath->query('/php-config-options/section/option[@id="'.$option.'"]/desc')->item(0)->nodeValue;
-        $defvalue =
-            $this->xpath->query('/php-config-options/section/option[@id="'.$option.'"]/default')->item(0)->nodeValue;
-        $this->optionEntry->set_text($defvalue);
-        $this->optionDesc->set_text($desc);
-        $this->optionComments->set_text($this->optionIndex[$option]["Comments"]);
+
+        if ($section == "Dynamic Extensions") {
+            $desc = 
+                $this->xpath->query('/php-config-options/section/option[@id="extension"]/desc')->item(0)->nodeValue;
+            $this->optionEntry->set_text(self::EXT_ENABLED);
+            $this->optionDesc->set_text($desc);
+            $this->optionComments->set_text("");
+        } else {
+            $desc =
+                $this->xpath->query('/php-config-options/section/option[@id="'.$option.'"]/desc')->item(0)->nodeValue;
+            $defvalue =
+                $this->xpath->query('/php-config-options/section/option[@id="'.$option.'"]/default')->item(0)->nodeValue;
+            $this->optionEntry->set_text($defvalue);
+            $this->optionDesc->set_text($desc);
+            $this->optionComments->set_text($this->optionIndex[$option][self::COMMENT_NORMAL]);
+        }
     }
 
     //}}}
@@ -440,6 +474,7 @@ class Gtk2_PHPConfig extends GtkWindow
         $optionList = $this->getOptions($section);
         $optionModel = $this->optionTree->get_model();
         $optionModel->clear();
+        
         /* Filling the model with corresponding configuration options */
         foreach ($optionList as $option) {
             $optionModel->append(array($option[0], $option[1], $option[2]));
@@ -450,13 +485,18 @@ class Gtk2_PHPConfig extends GtkWindow
             }
         }
         $cell = new GtkCellRendererText();
-        $nameColumn = new GtkTreeViewColumn("Option", $cell, "text", 0);
+        if ($section = "Dynamic Extensions") {
+            $nameColumn = new GtkTreeViewColumn("Extension", $cell, "text", 0);
+        } else {
+            $nameColumn = new GtkTreeViewColumn("Option", $cell, "text", 0);
+        }
+
+        $currColumn = new GtkTreeViewColumn("Current Value", $cell, "text", 1);
+        $defColumn = new GtkTreeViewColumn("Default Value", $cell, "text", 2);
         $nameColumn->set_sort_column_id(0);
         $nameColumn->set_resizable(true);
-        $currColumn = new GtkTreeViewColumn("Current Value", $cell, "text", 1);
         $currColumn->set_sort_column_id(1);
         $currColumn->set_resizable(true);
-        $defColumn = new GtkTreeViewColumn("Default Value", $cell, "text", 2);
         $defColumn->set_sort_column_id(2);
         $defColumn->set_resizable(true);
 
@@ -506,14 +546,24 @@ class Gtk2_PHPConfig extends GtkWindow
     function getOptions($section)
     {
         $optionList = array();
-        $optionNodes =
-            $this->xpath->query('/php-config-options/section[@name="'.$section.'"]/option');
-
-        foreach ($optionNodes as $optionNode) {
-            $optionName = $optionNode->getAttribute("id");
-            $optionList[] = 
-                array($optionName, $this->optionIndex[$optionName][self::DIR_CURRENT], 
-                $this->optionIndex[$optionName][self::DIR_DEFAULT]);
+        
+        if ($section=="Dynamic Extensions") {
+            foreach ($this->extensions as $extName=>$extData) {
+                $optionList[] = 
+                    array($extName,
+                          $extData[self::DIR_CURRENT],
+                          self::EXT_DISABLED);
+            }
+        } else {
+            $optionNodes =
+                $this->xpath->query('/php-config-options/section[@name="'.$section.'"]/option');
+            foreach ($optionNodes as $optionNode) {
+                $optionName = $optionNode->getAttribute("id");
+                $optionList[] = 
+                    array($optionName,
+                          $this->optionIndex[$optionName][self::DIR_CURRENT], 
+                          $this->optionIndex[$optionName][self::DIR_DEFAULT]);
+            }
         }
         return $optionList;
     }
@@ -538,6 +588,7 @@ class Gtk2_PHPConfig extends GtkWindow
             } 
             
             $theFile = file($this->fileName);
+            $entry = 0;
             foreach ($toWrite as $option=>$value) {
                 /* Empty or Disabled configuration options are not written
                  * to the file. */
@@ -551,15 +602,34 @@ class Gtk2_PHPConfig extends GtkWindow
                 } else {
                     $inline = " ;".$value[self::COMMENT_INLINE]."\n";
                 }
-                if ($value[self::DIR_CURRENT] != "Disabled" && trim($value[self::DIR_CURRENT]) != "") {
+                if ($value[self::DIR_CURRENT] != "Disabled" && 
+                    trim($value[self::DIR_CURRENT]) != "") {
                     if(trim($value[self::COMMENT_NORMAL]) != "") {
                         $theFile[$lineNumber] = "\n;/ ".str_replace("\n", "\n;/ ", 
                         $value[self::COMMENT_NORMAL])."\n";
-                    } else {
-                        $theFile[$lineNumber] = $option." = ".$value[self::DIR_CURRENT].$inline;
-                    }
-                } elseif ($value[self::DIR_CURRENT] == "Disabled" || trim($value[self::DIR_CURRENT]) == "") {
-                    $theFile[$lineNumber] = ";".$option." = ".$value[self::DIR_DEFAULT].$inline;
+                    } 
+                    $theFile[$lineNumber] = $option." = ".$value[self::DIR_CURRENT].$inline;
+                } elseif ($value[self::DIR_CURRENT] == "Disabled" ||
+                          trim($value[self::DIR_CURRENT]) == "") {
+                        $theFile[$lineNumber] = ";".$option." = ".$value[self::DIR_DEFAULT].$inline;
+                }
+            }
+            
+            foreach ($this->extensions as $extName=>$value) {
+                if (!$newFile) {
+                    $lineNumber = $value[self::DIR_NUMBER];
+                } else {
+                    $lineNumber += 1;
+                }
+                if (trim($value[self::COMMENT_INLINE]) == "") {
+                    $inline = "\n";
+                } else {
+                    $inline = " ;".$value[self::COMMENT_INLINE]."\n";
+                }
+                if ($value[self::DIR_CURRENT] == self::EXT_ENABLED) {
+                    $theFile[$lineNumber] = "extension = ".$extName.$inline;
+                } else {
+                    $theFile[$lineNumber] = ";extension = ".$extName.$inline;
                 }
             }
             $this->saved = true;
@@ -632,17 +702,32 @@ class Gtk2_PHPConfig extends GtkWindow
     {
         $selection = $this->optionTree->get_selection();
         list($model, $iter) = $selection->get_selected();
+        list($sModel, $sIter) = $this->sectionTree->get_selection()->get_selected();
+        if (!$iter || !$sIter) {
+            return;
+        }
+        
         $option = $model->get_value($iter, 0);
+        $section = $sModel->get_value($sIter, 0);
         $value = $this->optionEntry->get_text();
         $model->set($iter, 1, $value);
-        /* Set the value of the configuration option in the buffer */
-        $this->optionIndex[$option][self::DIR_CURRENT] = $value;
-        /* Retreive and set the comments, if any, in the buffer */
+
+        /* Retreive the comments, if any, in the buffer */
         $comments = $this->optionComments;
         $comments = $comments->get_text($comments->get_start_iter(), $comments->get_end_iter());
-        if (trim($comments) != "") {
-            $this->optionIndex[$option][self::DIR_CURRENT] = $comments;
+
+        if ($section == "Dynamic Extensions") {
+            $this->extensions[$option][self::DIR_CURRENT] = $value;
+            if (trim($comments) != "") {
+                $this->extensions[$option][self::COMMENT_NORMAL] = $comments;
+            }
+        } else {
+            $this->optionIndex[$option][self::DIR_CURRENT] = $value;
+            if (trim($comments) != "") {
+                $this->extensions[$option][self::COMMENT_NORMAL] = $comments;
+            }
         }
+        
         /* Set saved flag to false */
         $this->saved = false;
         $this->setTitle();
@@ -659,10 +744,21 @@ class Gtk2_PHPConfig extends GtkWindow
     {
         $selection = $this->optionTree->get_selection();
         list($model, $iter) = $selection->get_selected();
+        list($sModel, $sIter) = $this->sectionTree->get_selection()->get_selected();
+        if (!$iter || !$sIter) {
+            return;
+        }
+        
         $option = $model->get_value($iter, 0);
+        $section = $sModel->get_value($sIter, 0);
         $model->set($iter, 1, "Disabled");
-        /* Unset the value in the buffer */
-        $this->optionIndex[$option][self::DIR_CURRENT] = "Disabled";
+
+        if ($section == "Dynamic Extensions") {
+            $this->extensions[$option][self::DIR_CURRENT] = self::EXT_DISABLED;
+        } else {
+            $this->optionIndex[$option][self::DIR_CURRENT] = "Disabled";
+        }
+
         $this->saved = false;
         $this->setTitle();
     }
@@ -681,16 +777,22 @@ class Gtk2_PHPConfig extends GtkWindow
     function getValues()
     {
         $index = array();
+        $extensions = array();
         $current = "";
         $comment = "";
-        $options = $this->xmlDefs->getElementsByTagName("option");
-        $total = $options->length;
+        $optionNodes = $this->xmlDefs->getElementsByTagName("option");
+        $options = array();
+        foreach ($optionNodes as $node) {
+            $options[] = array($node->getAttribute("id"), 
+                               $node->getElementsByTagName("default")->item(0)->nodeValue);
+        }
         $this->showProgress();
         
-        foreach ($options as $no=>$optionNode) {
-            $optionName = $optionNode->getAttribute("id");
-            $optionDef = $optionNode->getElementsByTagName("default")->item(0)->nodeValue;
+        foreach ($options as $no=>$optionData) {
+            $total = count($options);
             if ($this->fileName!=null) {
+                $optionName = $optionData[0];
+                $optionDef = $optionData[1];
                 /* Set all configuration options to disabled. These values
                  * will be rewritten after parsing the INI file
                  */
@@ -701,52 +803,88 @@ class Gtk2_PHPConfig extends GtkWindow
                 /* Set all configuration options to default values since a
                  * new file is to be generated
                  */
+                $optionName = $optionData[0];
+                $optionDef = $optionData[1];
                 $index[$optionName] = array(self::DIR_CURRENT=>$optionDef, self::DIR_DEFAULT=>$optionDef, 
                 self::COMMENT_NORMAL=>"", self::COMMENT_INLINE=>"", self::DIR_NUMBER=>"");
                 $this->updateProgress($no/$total);
             }
         }
-        
         if ($this->fileName!=null) {
             $status = file($this->fileName);
             $total = count($status);
             foreach ($status as $no=>$line) {
                 $this->updateProgress(0.1+(0.9*($no/$total)));
-                foreach ($options as $optionNode) {
-                    $optionName = $optionNode->getAttribute("id");
-                    /* Parse INI file and set values of found options in
-                     * the buffer along with comments, if any.
-                     */
-                    $optionLength = strlen($optionName);
-                    $optionShown = substr($line, 0, $optionLength);
-                    $optionHidden = substr($line, 1, $optionLength);
-                    if ($optionShown == $optionName) {
-                        $whereis = strpos($line, "=");
-                        $values = substr($line, $whereis+1, strlen($line)-$whereis);
-                        $values = explode(";", $values);
-                        $index[$optionName][self::DIR_CURRENT] = trim($values[0]);
-                        $index[$optionName][self::COMMENT_NORMAL] = $comment;
-                        $index[$optionName][self::DIR_NUMBER] = $no;
-                        $index[$optionName][self::COMMENT_INLINE] = trim($values[1]);
-                        $comment = "";
-                    } elseif ($optionHidden == $optionName) {
-                        $index[$optionName][self::DIR_CURRENT] = "Disabled";
-                        $index[$optionName][self::COMMENT_NORMAL] = "";
-                        $index[$optionName][self::DIR_NUMBER] = $no;
-                    } elseif (substr($line, 0, 2)==";/") {
-                        if ($line != $current) {
-                            $current = $line;
-                            if(substr($line, 2, 1)==" ") {
-                                $comment .= substr($line, 3, strlen($line)-3);
-                            } else {
-                                $comment .= substr($line, 2, strlen($line)-2);
+                foreach ($options as $opNo=>$data) {
+                    if (strpos($line, "extension")!==false) {
+                        if (substr($line, 0 , 9) == "extension") {
+                            $extStatus = self::EXT_ENABLED;
+                        } elseif (substr($line, 1, 9) == "extension") {
+                            $extStatus = self::EXT_DISABLED;
+                        }
+                        if (isset($extStatus)) {    
+                            $check = explode("=", $line);
+                            if (trim($check[0])=="extension" || trim($check[0])==";extension") {
+                                $extValue = $check[1];
+                                $remComments = explode(";", $extValue);
+                                $extName = trim($remComments[0]);
+                                if (array_key_exists(1, $remComments)) {
+                                    $extensions[$extName][self::COMMENT_INLINE] = $remComments[1];
+                                } else {
+                                    $extensions[$extName][self::COMMENT_INLINE] = "";
+                                }
+                                $extensions[$extName][self::DIR_CURRENT] = $extStatus;
+                                $extensions[$extName][self::DIR_NUMBER] = $no;
                             }
+                        }                  
+                    }
+                    if (strpos($line, $data[0])!==false) {
+                        $delFlag = false;
+                        $optionName = trim($data[0]);
+                        $optionLength = strlen(trim($optionName));
+                        $optionShown = substr($line, 0, $optionLength);
+                        $optionHidden = substr($line, 1, $optionLength);
+                        if ($optionShown == $optionName) {
+                            $whereis = strpos($line, "=");
+                            $directive = substr($line, 0, $whereis);
+                            $values = substr($line, $whereis+1, strlen($line)-$whereis);
+                            $values = explode(";", $values);
+                            /* Check if this is not part of a bigger extension */
+                            if (strlen(trim($directive)) == strlen(trim($optionName))) {
+                                $index[$optionName][self::DIR_CURRENT] = trim($values[0]);
+                                $index[$optionName][self::COMMENT_NORMAL] = $comment;
+                                $index[$optionName][self::DIR_NUMBER] = $no;
+                                if (array_key_exists(1, $values)) {
+                                    $index[$optionName][self::COMMENT_INLINE] = trim($values[1]);
+                                }
+                            }
+                            $comment = "";
+                            $delFlag = true;
+                        } elseif ($optionHidden == $optionName && $optionHidden != "extension") {
+                            $index[$optionName][self::DIR_CURRENT] == "Disabled";
+                            $index[$optionName][self::COMMENT_NORMAL] = "";
+                            $index[$optionName][self::DIR_NUMBER] = $no;
+                            $delFlag = true;
+                        } elseif (substr($line, 0, 2)==";/" && $optionHi) {
+                            if ($line != $current) {
+                                $current = $line;
+                                if(substr($line, 2, 1)==" ") {
+                                    $comment .= substr($line, 3, strlen($line)-3);
+                                } else {
+                                    $comment .= substr($line, 2, strlen($line)-2);
+                                }
+                            }
+                        }   
+                        /* Performance enhancing trick */
+                        if ($delFlag) {
+                            unset($options[$opNo]);
                         }
                     }
                 }
             }
         }
         $this->progress->destroy();
+        $this->extensions = $extensions;
         return $index;
     }
     
@@ -813,12 +951,13 @@ class Gtk2_PHPConfig extends GtkWindow
             Gtk::STOCK_OPEN, Gtk::RESPONSE_ACCEPT));
         }
         
-        if (is_object($filePrompt) && $filePrompt->run() == Gtk::RESPONSE_ACCEPT) {
+        if ($filePrompt->run() == Gtk::RESPONSE_ACCEPT) {
             $this->fileName = $filePrompt->get_filename();
-              $this->optionIndex = $this->getValues();
-        }
-        if (is_object($filePrompt)) {
-            $filePrompt->destroy();
+            $this->optionIndex = $this->getValues();
+        } else {   
+            if (is_object($filePrompt)) {
+                $filePrompt->destroy();
+            }
         }
         
         $itemSelect = $this->sectionTree->get_selection();
