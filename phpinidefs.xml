@@ -293,7 +293,7 @@ reporting level
                 - Show all errors, except for notices
                 - Show only errors
                 - Show all errors except for notices and coding standards warnings</desc>
-        <default disabled="0"><![CDATA[E_ALL & ~E_NOTICE]]></default>
+        <default disabled="1"><![CDATA[E_ALL & ~E_NOTICE]]></default>
     </option>
 
     <option id="display_errors">
